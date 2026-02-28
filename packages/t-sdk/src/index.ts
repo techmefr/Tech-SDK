@@ -1,5 +1,10 @@
 export { createTSDK } from './core/createTSDK'
 export { TSDKError } from './core/TSDKError'
-export { restDriver } from './drivers/rest'
-export { lomkitDriver } from './drivers/lomkit'
-export type { ITSDKOptions, ITSDKInstance, IResource, IMethod, ITransport } from './types/ITSDK'
+export type {
+    IMethodDefinition,
+    IPlugin,
+    ITransport,
+    ITSDKOptions,
+    ITSDKInstance,
+    IAnyTSDKInstance,
+} from './types/ITSDK'

@@ -1,20 +1,20 @@
-import type { IResource, ITSDKInstance, ITSDKOptions } from '../types/ITSDK'
+import type { IMethodDefinition, ITSDKInstance, ITSDKOptions } from '../types/ITSDK'
 import { TSDKError } from './TSDKError'
 
-export function createTSDK<TResources extends Record<string, IResource>>(
-    options: ITSDKOptions<TResources>
-): ITSDKInstance<TResources> {
-    const { transport, driver, baseURL, resources } = options
+export function createTSDK<
+    TMethods extends Record<string, IMethodDefinition>,
+    TResources extends readonly string[],
+>(options: ITSDKOptions<TMethods, TResources>): ITSDKInstance<TMethods, TResources> {
+    const { transport, baseURL, plugin, resources } = options
 
-    const instance = {} as ITSDKInstance<TResources>
+    const instance = {} as ITSDKInstance<TMethods, TResources>
 
-    for (const resourceKey of Object.keys(resources) as (keyof TResources & string)[]) {
-        const resource = resources[resourceKey]
+    for (const resourceName of resources) {
         const resourceObj: Record<string, (payload?: unknown) => Promise<unknown>> = {}
 
-        for (const methodKey of Object.keys(resource.methods)) {
-            resourceObj[methodKey] = async (payload?: unknown) => {
-                const request = driver.resolve(resourceKey, methodKey, payload)
+        for (const [methodName, methodDef] of Object.entries(plugin.methods)) {
+            resourceObj[methodName] = async (payload?: unknown) => {
+                const request = methodDef.resolve(resourceName, payload)
 
                 try {
                     return await transport(`${baseURL}${request.url}`, {
@@ -41,7 +41,8 @@ export function createTSDK<TResources extends Record<string, IResource>>(
             }
         }
 
-        instance[resourceKey] = resourceObj as ITSDKInstance<TResources>[keyof TResources]
+        instance[resourceName as TResources[number]] =
+            resourceObj as ITSDKInstance<TMethods, TResources>[TResources[number]]
     }
 
     return instance
