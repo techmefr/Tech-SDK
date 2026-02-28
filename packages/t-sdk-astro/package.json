@@ -1,0 +1,18 @@
+{
+    "name": "@t-suite/t-sdk-astro",
+    "version": "0.0.1",
+    "type": "module",
+    "exports": {
+        ".": "./src/index.ts"
+    },
+    "scripts": {
+        "build": "tsc -b",
+        "typecheck": "tsc --noEmit"
+    },
+    "dependencies": {
+        "@t-suite/t-sdk": "workspace:*"
+    },
+    "peerDependencies": {
+        "astro": ">=4.0.0"
+    }
+}

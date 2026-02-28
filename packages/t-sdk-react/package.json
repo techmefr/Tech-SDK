@@ -1,0 +1,22 @@
+{
+    "name": "@t-suite/t-sdk-react",
+    "version": "0.0.1",
+    "type": "module",
+    "exports": {
+        ".": "./src/index.ts"
+    },
+    "scripts": {
+        "build": "tsc -b",
+        "typecheck": "tsc --noEmit"
+    },
+    "dependencies": {
+        "@t-suite/t-sdk": "workspace:*"
+    },
+    "devDependencies": {
+        "@types/react": "^19.0.0",
+        "react": "^19.0.0"
+    },
+    "peerDependencies": {
+        "react": ">=18.0.0"
+    }
+}
