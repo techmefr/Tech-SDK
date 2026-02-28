@@ -1,0 +1,13 @@
+{
+    "name": "t-suite",
+    "private": true,
+    "version": "0.0.1",
+    "scripts": {
+        "build": "pnpm -r build",
+        "typecheck": "pnpm -r typecheck",
+        "lint": "pnpm -r lint"
+    },
+    "devDependencies": {
+        "typescript": "^5.8.2"
+    }
+}
