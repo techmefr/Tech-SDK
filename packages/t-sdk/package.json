@@ -1,0 +1,15 @@
+{
+    "name": "@t-suite/t-sdk",
+    "version": "0.0.1",
+    "type": "module",
+    "exports": {
+        ".": "./src/index.ts"
+    },
+    "scripts": {
+        "build": "tsc -b",
+        "typecheck": "tsc --noEmit"
+    },
+    "dependencies": {
+        "@t-suite/shared": "workspace:*"
+    }
+}
