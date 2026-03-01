@@ -1,6 +1,6 @@
 # T-SDK
 
-Couche de transport API framework-agnostique pour l'écosystème T-Suite.
+Couche de transport API agnostique au framework pour l'écosystème T-Suite.
 
 **Disponible en :** [English](./README.md) · [Español](./README.es.md) · [Italiano](./README.it.md) · [Deutsch](./README.de.md) · [Português](./README.pt.md) · [中文](./README.zh.md)
 
@@ -8,18 +8,30 @@ Couche de transport API framework-agnostique pour l'écosystème T-Suite.
 
 ## Vue d'ensemble
 
-T-SDK est une couche de transport HTTP fortement typée, basée sur un système de drivers. Elle abstrait le protocole de communication backend derrière une API fluide orientée ressources, de sorte que votre frontend ne sait jamais s'il parle à une API REST, Lomkit ou GraphQL.
+T-SDK est une couche de transport HTTP fortement typée et basée sur des plugins. Au lieu de configurer les méthodes HTTP et les routes par ressource, vous installez un **sous-SDK** (un plugin pour votre convention de backend) et déclarez uniquement les noms de ressources dont vous avez besoin. Le plugin fournit toutes les méthodes.
 
 ```ts
-const res = await TSDK.user.create(payload)
+import { createLomkitSDK } from '@t-suite/t-sdk/lomkit'
+import { ofetch } from 'ofetch'
+
+const TSDK = createLomkitSDK({
+    transport: ofetch,
+    baseURL:   'https://api.example.com',
+    resources: ['user', 'product', 'order'] as const,
+})
+
+await TSDK.user.search({ filters: [{ field: 'active', value: true }] })
+await TSDK.user.mutate({ mutate: [{ operation: 'create', attributes: { name: 'Alice' } }] })
+await TSDK.product.destroy({ key: 42 })
 ```
 
 ### Principes clés
 
-- **Agnostique backend** — changez le driver, pas les appels
-- **Agnostique framework** — cœur TypeScript pur, avec des adaptateurs légers pour React, Vue et Astro
-- **Fortement typé** — ressources et méthodes inférées à la compilation
-- **Erreurs normalisées** — chaque échec HTTP remonte sous forme de `TSDKError`
+- **Architecture plugin** — le sous-SDK possède les méthodes, le driver et les types
+- **Ressource = un nom** — vous passez `'user'` et obtenez toutes les méthodes du plugin inférées par TypeScript
+- **Méthode = un fichier** — chaque méthode est un fichier autonome qui résout sa propre requête HTTP
+- **Nommé par l'équipe frontend** — `softDelete`, `archive`, `publish` correspondent à ce qu'attend le backend
+- **Scaffolding CLI** — ajoutez des sous-SDKs, des ressources et des méthodes sans modifier aucun fichier existant
 
 ---
 
@@ -27,274 +39,326 @@ const res = await TSDK.user.create(payload)
 
 | Package | Description |
 |---|---|
-| `@t-suite/t-sdk` | Transport central (driver, normalisation d'erreurs) |
+| `@t-suite/t-sdk` | Core + sous-SDKs intégrés (`/rest`, `/lomkit`) |
+| `@t-suite/t-sdk-cli` | CLI — `t-sdk add`, `t-sdk add-resource`, `t-sdk add-method` |
 | `@t-suite/t-sdk-react` | Contexte React + hooks `useQuery` / `useMutation` |
 | `@t-suite/t-sdk-vue` | Composables Vue (`useTSDK`, `useQuery`, `useMutation`) |
-| `@t-suite/t-sdk-astro` | Helper côté serveur Astro (`defineTSDK`) |
+| `@t-suite/t-sdk-astro` | Helper serveur Astro (`defineTSDK`) |
 
 ---
 
 ## Installation
 
-### Avec npm
-
-```bash
-# Cœur uniquement
-npm install @t-suite/t-sdk
-
-# React / Next.js
-npm install @t-suite/t-sdk @t-suite/t-sdk-react
-
-# Vue / Nuxt
-npm install @t-suite/t-sdk @t-suite/t-sdk-vue
-
-# Astro
-npm install @t-suite/t-sdk @t-suite/t-sdk-astro
-```
-
-### Avec pnpm (recommandé)
-
 ```bash
 pnpm add @t-suite/t-sdk
-pnpm add @t-suite/t-sdk-react  # React / Next.js
-pnpm add @t-suite/t-sdk-vue    # Vue / Nuxt
-pnpm add @t-suite/t-sdk-astro  # Astro
+
+# Adaptateurs de framework
+pnpm add @t-suite/t-sdk-react   # React / Next.js
+pnpm add @t-suite/t-sdk-vue     # Vue / Nuxt
+pnpm add @t-suite/t-sdk-astro   # Astro
+
+# CLI
+pnpm add -D @t-suite/t-sdk-cli
 ```
 
 ---
 
-## SDK Core
+## Architecture
 
-### 1. Définir vos ressources
+### Sous-SDKs
 
-Une **Resource** déclare les méthodes que votre backend expose pour cette entité.
+Un sous-SDK est un dossier autonome à l'intérieur de `t-sdk/src/` qui regroupe un **plugin** (méthodes + types) pour une convention de backend spécifique.
 
-```ts
-// resources/user.resource.ts
-import type { IResource } from '@t-suite/t-sdk'
-
-export const UserResource = {
-    methods: {
-        list:   { path: '/users',     httpMethod: 'GET'    },
-        get:    { path: '/users/:id', httpMethod: 'GET'    },
-        create: { path: '/users',     httpMethod: 'POST'   },
-        update: { path: '/users/:id', httpMethod: 'PUT'    },
-        delete: { path: '/users/:id', httpMethod: 'DELETE' },
-    },
-} satisfies IResource
+```
+t-sdk/src/
+├── core/           ← createTSDK, TSDKError
+├── lomkit/         ← sous-SDK Lomkit
+│   ├── driver.ts
+│   ├── methods/    ← search.ts, mutate.ts, destroy.ts, restore.ts, actions.ts
+│   ├── resources/  ← interfaces de ressources par projet (générées par le CLI)
+│   ├── types/      ← ILomkitSearchPayload, ILomkitMutatePayload, …
+│   └── index.ts    ← createLomkitSDK, lomkitPlugin
+├── rest/           ← sous-SDK REST
+│   ├── methods/    ← list.ts, get.ts, create.ts, update.ts, delete.ts
+│   └── index.ts    ← createRestSDK, restPlugin
+└── index.ts
 ```
 
-### 2. Choisir un driver
+### Fichiers de méthodes
 
-Un **Driver** transforme le nom de la ressource et de la méthode en une requête HTTP concrète.
-
-#### Driver REST
-
-Suit les conventions d'URL REST classiques.
+Chaque méthode est un fichier qui exporte une `IMethodDefinition` — une unique fonction `resolve` qui mappe `(resource, payload) → IRequest`.
 
 ```ts
-import { restDriver } from '@t-suite/t-sdk'
-```
-
-#### Driver Lomkit
-
-Envoie chaque requête en `POST` avec `{ action, payload }`.
-
-```ts
-import { lomkitDriver } from '@t-suite/t-sdk'
-```
-
-#### Driver personnalisé
-
-Implémentez l'interface `IDriver` pour cibler n'importe quelle convention backend.
-
-```ts
-import type { IDriver, IRequest } from '@t-suite/shared'
-
-const monDriver: IDriver = {
-    resolve(resource, method, payload): IRequest {
+// lomkit/methods/destroy.ts
+export const destroy: IMethodDefinition = {
+    resolve: (resource, payload) => {
+        const { key } = payload as { key: number | string }
         return {
-            url: `/${resource}/${method}`,
+            url:    `/${resource}/mutate`,
             method: 'POST',
-            body: payload,
+            body:   { mutate: [{ operation: 'destroy', key }] },
         }
     },
 }
 ```
 
-### 3. Créer l'instance du SDK
+Le nom frontend (`destroy`) et le payload backend sont **découplés**. Nommez la méthode comme il convient dans votre base de code.
+
+---
+
+## Sous-SDKs intégrés
+
+### Lomkit
+
+Pour les backends utilisant [Laravel Lomkit](https://github.com/lomkit/laravel-rest-api).
 
 ```ts
-// lib/tsdk.ts
-import { createTSDK, restDriver } from '@t-suite/t-sdk'
-import { ofetch } from 'ofetch'
-import { UserResource } from './resources/user.resource'
+import { createLomkitSDK } from '@t-suite/t-sdk/lomkit'
 
-export const TSDK = createTSDK({
+const TSDK = createLomkitSDK({
     transport: ofetch,
-    driver:    restDriver,
     baseURL:   'https://api.example.com',
-    resources: {
-        user: UserResource,
-    },
+    resources: ['user', 'product'] as const,
 })
 ```
 
-### 4. Effectuer des appels
+| Méthode | Endpoint | Description |
+|---|---|---|
+| `search(payload)` | `POST /{resource}/search` | Filtrer, trier, paginer |
+| `mutate(payload)` | `POST /{resource}/mutate` | Créer, mettre à jour en lot |
+| `destroy({ key })` | `POST /{resource}/mutate` | Supprimer par clé |
+| `restore({ key })` | `POST /{resource}/restore` | Restaurer un enregistrement supprimé en douceur |
+| `actions({ action, ...body })` | `POST /{resource}/actions/{action}` | Actions backend personnalisées |
+
+#### Exemple de recherche
 
 ```ts
-const users   = await TSDK.user.list()
-const user    = await TSDK.user.get({ id: 1 })
-const newUser = await TSDK.user.create({ name: 'Alice', email: 'alice@example.com' })
+const result = await TSDK.user.search({
+    filters: [
+        { field: 'active',      value: true },
+        { field: 'role',        operator: 'in', value: ['admin', 'editor'] },
+    ],
+    sorts:   [{ field: 'created_at', direction: 'desc' }],
+    page:    1,
+    limit:   20,
+})
+```
+
+#### Exemple de mutation
+
+```ts
+await TSDK.user.mutate({
+    mutate: [
+        { operation: 'create', attributes: { name: 'Alice', email: 'alice@example.com' } },
+        { operation: 'update', key: 5, attributes: { name: 'Bob' } },
+    ],
+})
+```
+
+---
+
+### REST
+
+Pour les backends RESTful conventionnels.
+
+```ts
+import { createRestSDK } from '@t-suite/t-sdk/rest'
+
+const TSDK = createRestSDK({
+    transport: ofetch,
+    baseURL:   'https://api.example.com',
+    resources: ['user', 'product'] as const,
+})
+```
+
+| Méthode | Endpoint | Description |
+|---|---|---|
+| `list()` | `GET /{resource}` | Obtenir tout |
+| `get({ id })` | `GET /{resource}/{id}` | Obtenir un élément |
+| `create(body)` | `POST /{resource}` | Créer |
+| `update({ id, ...body })` | `PUT /{resource}/{id}` | Remplacer |
+| `delete({ id })` | `DELETE /{resource}/{id}` | Supprimer |
+
+---
+
+## CLI
+
+### Ajouter un sous-SDK
+
+Génère un nouveau dossier de sous-SDK et met à jour `t-sdk/src/index.ts`.
+
+```bash
+t-sdk add graphql
+# → crée t-sdk/src/graphql/ (methods/, resources/, types/, index.ts)
+# → met à jour t-sdk/src/index.ts
+# → le lead dev implémente driver.ts
+```
+
+### Ajouter une ressource
+
+Génère une interface de ressource typée. Si une URL backend est fournie, une introspection est tentée.
+
+```bash
+# Modèle pré-rempli (le dev complète les champs)
+t-sdk add-resource user --sdk=lomkit
+
+# Avec introspection (envoie POST /user/search, mappe la forme de la réponse)
+t-sdk add-resource user --sdk=lomkit --url=https://api.example.com
+```
+
+Fichier généré :
+
+```ts
+// t-sdk/src/lomkit/resources/user.ts
+export interface IUser {
+    id:         number
+    name:       string
+    email:      string
+    created_at: string
+    updated_at: string
+}
+```
+
+### Ajouter une méthode
+
+Génère un nouveau fichier de méthode et met à jour le `methods/index.ts` du SDK.
+
+```bash
+t-sdk add-method softDelete --sdk=lomkit
+# → crée methods/softDelete.ts avec un modèle
+# → met à jour methods/index.ts
+# → le lead dev implémente la fonction resolve
 ```
 
 ---
 
 ## Gestion des erreurs
 
-Chaque requête échouée est normalisée en `TSDKError`.
+Toute requête échouée remonte comme une `TSDKError`.
 
 ```ts
 import { TSDKError } from '@t-suite/t-sdk'
 
 try {
-    await TSDK.user.create(payload)
+    await TSDK.user.mutate(payload)
 } catch (error) {
     if (error instanceof TSDKError) {
-        console.log(error.status)   // Code HTTP
-        console.log(error.message)  // Message lisible
-        console.log(error.errors)   // Erreurs par champ
+        error.status   // Code de statut HTTP
+        error.message  // Message lisible par un humain
+        error.errors   // Record<string, string[]> — erreurs au niveau des champs
     }
 }
 ```
 
 ---
 
-## Adaptateurs Framework
+## Adaptateurs de framework
 
 ### React / Next.js
-
-#### Configuration
-
-Enveloppez votre application avec `TSDKProvider`.
 
 ```tsx
 // app/layout.tsx
 import { TSDKProvider } from '@t-suite/t-sdk-react'
 import { TSDK } from '@/lib/tsdk'
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-    return (
-        <html>
-            <body>
-                <TSDKProvider sdk={TSDK}>{children}</TSDKProvider>
-            </body>
-        </html>
-    )
-}
+<TSDKProvider sdk={TSDK}>{children}</TSDKProvider>
 ```
-
-#### `useQuery`
 
 ```tsx
-import { useTSDKContext, useQuery } from '@t-suite/t-sdk-react'
+import { useTSDKContext, useQuery, useMutation } from '@t-suite/t-sdk-react'
 
-export function UserList() {
-    const sdk = useTSDKContext()
-    const { data, isLoading, error } = useQuery(() => sdk.user.list())
+const sdk = useTSDKContext()
 
-    if (isLoading) return <p>Chargement…</p>
-    if (error)     return <p>Erreur : {error.message}</p>
-
-    return <ul>{(data as User[]).map(u => <li key={u.id}>{u.name}</li>)}</ul>
-}
+const { data, isLoading } = useQuery(() => sdk.user.search({ page: 1 }))
+const { mutate }          = useMutation((p) => sdk.user.mutate(p))
 ```
-
-#### `useMutation`
-
-```tsx
-import { useTSDKContext, useMutation } from '@t-suite/t-sdk-react'
-
-export function CreateUserForm() {
-    const sdk = useTSDKContext()
-    const { mutate, isLoading } = useMutation((p: UserPayload) => sdk.user.create(p))
-
-    return <button onClick={() => mutate({ name: 'Alice', email: 'alice@example.com' })}>Créer</button>
-}
-```
-
----
 
 ### Vue / Nuxt
 
-#### Configuration
-
-Appelez `provideTSDK` à la racine de l'app ou dans un plugin Nuxt.
-
 ```ts
-// plugins/tsdk.ts (Nuxt)
+// plugins/tsdk.ts
 import { provideTSDK } from '@t-suite/t-sdk-vue'
 import { TSDK } from '@/lib/tsdk'
 
-export default defineNuxtPlugin(() => {
-    provideTSDK(TSDK)
-})
+export default defineNuxtPlugin(() => provideTSDK(TSDK))
 ```
-
-#### `useQuery`
 
 ```vue
 <script setup lang="ts">
-import { useQuery, useTSDK } from '@t-suite/t-sdk-vue'
+import { useTSDK, useQuery } from '@t-suite/t-sdk-vue'
 
 const sdk = useTSDK()
-const { data, isLoading, error } = useQuery(() => sdk.user.list())
+const { data, isLoading } = useQuery(() => sdk.user.search({ page: 1 }))
 </script>
 ```
-
-#### `useMutation`
-
-```vue
-<script setup lang="ts">
-import { useMutation, useTSDK } from '@t-suite/t-sdk-vue'
-
-const sdk = useTSDK()
-const { mutate, isLoading } = useMutation((p: UserPayload) => sdk.user.create(p))
-
-async function submit() {
-    await mutate({ name: 'Alice', email: 'alice@example.com' })
-}
-</script>
-```
-
----
 
 ### Astro
 
 ```ts
 // lib/tsdk.ts
 import { defineTSDK } from '@t-suite/t-sdk-astro'
-import { restDriver } from '@t-suite/t-sdk'
+import { lomkitPlugin } from '@t-suite/t-sdk/lomkit'
 import { ofetch } from 'ofetch'
-import { UserResource } from './resources/user.resource'
 
 export const TSDK = defineTSDK({
     transport: ofetch,
-    driver:    restDriver,
     baseURL:   'https://api.example.com',
-    resources: { user: UserResource },
+    plugin:    lomkitPlugin,
+    resources: ['user', 'product'] as const,
 })
 ```
 
 ```astro
 ---
 import { TSDK } from '../lib/tsdk'
-const users = await TSDK.user.list()
+const users = await TSDK.user.search({ limit: 10 })
+---
+```
+
 ---
 
-<ul>
-    {users.map(u => <li>{u.name}</li>)}
-</ul>
+## Étendre avec un sous-SDK personnalisé
+
+```bash
+t-sdk add mybackend
+```
+
+Ensuite, implémentez `driver.ts` et ajoutez des méthodes :
+
+```ts
+// t-sdk/src/mybackend/methods/customMethod.ts
+import type { IMethodDefinition } from '../../types/ITSDK'
+
+export const customMethod: IMethodDefinition = {
+    resolve: (resource, payload) => ({
+        url:    `/${resource}/custom`,
+        method: 'POST',
+        body:   payload,
+    }),
+}
+```
+
+```bash
+t-sdk add-method customMethod --sdk=mybackend
+t-sdk add-resource user --sdk=mybackend
+```
+
+---
+
+## Structure du dépôt
+
+```
+t-suite/
+├── packages/
+│   ├── shared/           # Interfaces partagées (IRequest, ITSDKError)
+│   ├── t-sdk/            # Core + sous-SDKs (lomkit, rest, …)
+│   ├── t-sdk-cli/        # CLI (add, add-resource, add-method)
+│   ├── t-sdk-react/      # Adaptateur React
+│   ├── t-sdk-vue/        # Adaptateur Vue
+│   └── t-sdk-astro/      # Adaptateur Astro
+├── apps/                 # Applications playground (React, Next.js, Astro, Nuxt)
+├── pnpm-workspace.yaml
+└── tsconfig.json
 ```
 
 ---
