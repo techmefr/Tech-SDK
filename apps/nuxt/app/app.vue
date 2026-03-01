@@ -24,8 +24,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useTSDK, useQuery } from '@t-suite/t-sdk-vue'
+import { ref, computed } from 'vue'
+import { useQuery } from '@t-suite/t-sdk-vue'
 
 interface IPost {
     id: number
@@ -33,9 +33,9 @@ interface IPost {
     body: string
 }
 
-const sdk = useTSDK()
+const { $tsdk } = useNuxtApp()
 
-const { data, isLoading, error } = useQuery<IPost[]>(() => sdk.posts.list() as Promise<IPost[]>)
+const { data, isLoading, error } = useQuery<IPost[]>(() => $tsdk.posts.list() as Promise<IPost[]>)
 const posts = computed(() => data.value?.slice(0, 5) ?? [])
 
 const title = ref('')
@@ -46,7 +46,7 @@ async function handleSubmit() {
     if (!title.value) return
     isCreating.value = true
     try {
-        created.value = (await sdk.posts.create({
+        created.value = (await $tsdk.posts.create({
             title: title.value,
             body: 'Created via T-SDK',
             userId: 1,

@@ -1,4 +1,3 @@
-import { provideTSDK } from '@t-suite/t-sdk-vue'
 import { createRestSDK } from '@t-suite/t-sdk/rest'
 import type { ITransport } from '@t-suite/t-sdk'
 import { ofetch } from 'ofetch'
@@ -10,5 +9,5 @@ export default defineNuxtPlugin(() => {
         resources: ['posts', 'users'] as const,
     })
 
-    provideTSDK(sdk)
+    return { provide: { tsdk: sdk } }
 })
