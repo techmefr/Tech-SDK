@@ -3,7 +3,9 @@
     "version": "0.0.1",
     "type": "module",
     "exports": {
-        ".": "./src/index.ts"
+        ".": "./src/index.ts",
+        "./rest": "./src/rest/index.ts",
+        "./lomkit": "./src/lomkit/index.ts"
     },
     "scripts": {
         "build": "tsc -b",
