@@ -1,17 +1,33 @@
 ---
+import { tsdk } from '../lib/tsdk'
 
+interface IPost {
+    id: number
+    title: string
+    body: string
+}
+
+const posts = (await tsdk.rest.posts.list()) as IPost[]
 ---
 
 <html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<link rel="icon" href="/favicon.ico" />
-		<meta name="viewport" content="width=device-width" />
-		<meta name="generator" content={Astro.generator} />
-		<title>Astro</title>
-	</head>
-	<body>
-		<h1>Astro</h1>
-	</body>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width" />
+        <title>T-SDK — Astro playground</title>
+    </head>
+    <body>
+        <main>
+            <h1>T-SDK — Astro playground</h1>
+            <h2>Posts (server-side)</h2>
+            <ul>
+                {posts.slice(0, 5).map(post => (
+                    <li>
+                        <strong>{post.title}</strong>
+                        <p>{post.body}</p>
+                    </li>
+                ))}
+            </ul>
+        </main>
+    </body>
 </html>
