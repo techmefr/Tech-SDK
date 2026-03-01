@@ -1,0 +1,23 @@
+{
+    "name": "@t-suite/t-sdk-cli",
+    "version": "0.0.1",
+    "type": "module",
+    "bin": {
+        "t-sdk": "./src/index.ts"
+    },
+    "exports": {
+        ".": "./src/index.ts"
+    },
+    "scripts": {
+        "build": "tsc -b",
+        "typecheck": "tsc --noEmit"
+    },
+    "dependencies": {
+        "citty": "^0.2.0",
+        "consola": "^3.4.2",
+        "pathe": "^2.0.3"
+    },
+    "devDependencies": {
+        "typescript": "^5.8.2"
+    }
+}

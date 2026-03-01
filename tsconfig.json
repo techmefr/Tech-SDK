@@ -5,6 +5,7 @@
         { "path": "packages/t-sdk" },
         { "path": "packages/t-sdk-react" },
         { "path": "packages/t-sdk-vue" },
-        { "path": "packages/t-sdk-astro" }
+        { "path": "packages/t-sdk-astro" },
+        { "path": "packages/t-sdk-cli" }
     ]
 }
